@@ -78,6 +78,16 @@
     .card + .card { margin-top: 12px; }
     .card h2 { margin: 0 0 4px; font-size: 16px; }
     .hint { margin: 0 0 13px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .spot-card-head { min-width: 0; }
+    .center-card summary {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      color: var(--ink); font-size: 14px; font-weight: 850; cursor: pointer; list-style: none;
+    }
+    .center-card summary::-webkit-details-marker { display: none; }
+    .center-card summary::after { content: '⌄'; flex: none; color: var(--leaf); font-size: 18px; line-height: 1; transition: transform .2s; }
+    .center-card[open] summary::after { transform: rotate(180deg); }
+    .center-summary { min-width: 0; margin-left: auto; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .center-settings-body { padding-top: 8px; }
 
     .field { margin: 11px 0; }
     .field label { display: block; margin-bottom: 5px; color: #53675f; font-size: 12px; font-weight: 750; }
@@ -251,10 +261,18 @@
     @media (max-width: 760px) {
       body { overflow: auto; }
       .app { display: flex; flex-direction: column; min-height: 100%; height: auto; }
-      .panel { height: auto; min-height: 54vh; border-right: 0; border-bottom: 1px solid var(--line); }
-      .content { max-height: none; overflow: visible; }
-      .map-wrap { order: -1; height: 46vh; min-height: 340px; }
-      .brand { padding-top: 17px; }
+      .panel { height: auto; min-height: 30dvh; border-right: 0; border-bottom: 1px solid var(--line); }
+      .content { max-height: none; padding: 0 10px 18px; overflow: visible; }
+      .map-wrap { order: -1; height: 70dvh; min-height: 420px; }
+      .brand { padding: 9px 13px 7px; }
+      .eyebrow, .brand p { display: none; }
+      h1 { margin: 0; font-size: 19px; }
+      .card { padding: 10px 11px; border-radius: 14px; }
+      .card + .card { margin-top: 7px; }
+      .spot-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+      .spot-card .hint { margin: 2px 0 0; line-height: 1.35; }
+      #addSpot { width: auto; min-width: 132px; }
+      .center-card summary { min-height: 25px; }
       .batch-launch { top: max(9px, env(safe-area-inset-top)); left: 9px; min-height: 39px; padding: 7px 11px; }
       .batch-dock { top: max(56px, calc(env(safe-area-inset-top) + 47px)); right: 8px; width: 48vw; padding: 8px; border-radius: 15px; }
       .batch-preview-wrap { height: 31vh; }
@@ -278,21 +296,25 @@
 
       <div class="content">
         <section id="flowers" class="section active">
-          <div class="card">
-            <h2>附近地圖中心</h2>
-            <p class="hint">輸入一個預設點，只載入目前畫面附近的地圖。</p>
-            <div class="grid-2">
-              <div class="field"><label for="centerLat">中心緯度</label><input id="centerLat" type="number" step="any" value="25.005022"></div>
-              <div class="field"><label for="centerLng">中心經度</label><input id="centerLng" type="number" step="any" value="121.514369"></div>
+          <div class="card spot-card">
+            <div class="spot-card-head">
+              <h2>固定開花點</h2>
+              <p class="hint">按下新增，再點地圖位置。</p>
             </div>
-            <button id="showNearby" class="btn secondary wide">顯示這附近</button>
-          </div>
-
-          <div class="card">
-            <h2>固定開花點</h2>
-            <p class="hint">按下新增，再點地圖上的位置。開花點會一直保留，除非個別刪除。</p>
             <button id="addSpot" class="btn secondary wide">＋ 新增開花點</button>
           </div>
+
+          <details class="card center-card">
+            <summary><span>附近地圖中心</span><span id="centerSummary" class="center-summary">25.005022, 121.514369</span></summary>
+            <div class="center-settings-body">
+              <p class="hint">輸入預設點，只載入目前畫面附近的地圖。</p>
+              <div class="grid-2">
+                <div class="field"><label for="centerLat">中心緯度</label><input id="centerLat" type="number" step="any" value="25.005022"></div>
+                <div class="field"><label for="centerLng">中心經度</label><input id="centerLng" type="number" step="any" value="121.514369"></div>
+              </div>
+              <button id="showNearby" class="btn secondary wide">顯示這附近</button>
+            </div>
+          </details>
 
           <div class="card" id="timeCard">
             <h2>記錄開花時間</h2>
@@ -411,6 +433,7 @@
       const savedCenter = loadCenter();
       $('centerLat').value = savedCenter[0];
       $('centerLng').value = savedCenter[1];
+      updateCenterSummary(savedCenter[0], savedCenter[1]);
       map.setView(savedCenter, 16);
       setCenterMarker(savedCenter[0], savedCenter[1]);
       renderAll();
@@ -511,8 +534,13 @@
         const lat = Number($('centerLat').value), lng = Number($('centerLng').value);
         if (!validLatLng(lat, lng)) return alert('請輸入正確的中心經緯度。');
         localStorage.setItem(CENTER_KEY, JSON.stringify([lat, lng]));
+        updateCenterSummary(lat, lng);
         map.setView([lat, lng], 16);
         setCenterMarker(lat, lng);
+      }
+
+      function updateCenterSummary(lat, lng) {
+        $('centerSummary').textContent = `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`;
       }
 
       function setCenterMarker(lat, lng) {
