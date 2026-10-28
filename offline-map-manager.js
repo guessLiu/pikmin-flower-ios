@@ -106,7 +106,7 @@
       lng = Number(lng);
       radiusKm = Number(radiusKm);
       if (!validLatLng(lat, lng)) throw new Error('請輸入正確的中心經緯度。');
-      if (![2, 3, 4].includes(radiusKm)) throw new Error('離線範圍只支援 2、3 或 4 公里。');
+      if (![2, 3].includes(radiusKm)) throw new Error('離線範圍只支援 2 或 3 公里。');
       if (!this.canAddMap) {
         const replacement = this.profiles.find(profile => profile.id === replaceId && !profile.builtIn);
         if (!replacement) throw new Error('已達三組上限，請選擇要取代的自訂地圖。');
