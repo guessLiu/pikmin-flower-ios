@@ -93,9 +93,11 @@
     .map-manager-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; background: #f4f7f4; }
     .map-manager-name { font-size: 12px; font-weight: 850; }
     .map-manager-meta { margin-top: 2px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+    .map-manager-actions { display: flex; gap: 5px; }
     .new-map-form { margin-top: 9px; padding: 10px; border: 1px solid #cfe0d5; border-radius: 12px; background: #f7fbf8; }
     .new-map-form .field { margin: 8px 0; }
     .new-map-form-title { font-size: 13px; font-weight: 900; }
+    .map-fixed-radius { margin: 8px 0; padding: 8px 10px; border-radius: 10px; color: var(--leaf-dark); background: #eaf4ee; font-size: 11px; font-weight: 800; }
     .form-actions { display: flex; gap: 7px; margin-top: 9px; }
     .form-actions .btn { flex: 1; }
     .map-download-status { min-height: 17px; margin-top: 7px; color: var(--muted); font-size: 10px; line-height: 1.45; }
@@ -335,14 +337,14 @@
               <div id="mapManagerList" class="map-manager-list"></div>
               <button id="showNewMapForm" class="btn secondary wide" type="button" style="margin-top:8px">＋ 建立離線地圖</button>
               <form id="newMapForm" class="new-map-form" hidden>
-                <div class="new-map-form-title">建立並下載離線地圖</div>
+                <div id="mapFormTitle" class="new-map-form-title">建立並下載離線地圖</div>
                 <div class="field"><label for="newMapName">地圖名稱</label><input id="newMapName" maxlength="20" placeholder="例如：住家、公司"></div>
                 <div class="grid-2">
                   <div class="field"><label for="centerLat">中心緯度</label><input id="centerLat" type="number" inputmode="decimal" step="any" value="25.005022"></div>
                   <div class="field"><label for="centerLng">中心經度</label><input id="centerLng" type="number" inputmode="decimal" step="any" value="121.514369"></div>
                 </div>
                 <button id="useCurrentLocation" class="btn ghost wide" type="button">使用手機目前位置</button>
-                <div class="field"><label for="mapRadius">離線範圍</label><select id="mapRadius"><option value="2">中心周圍 2 公里</option><option value="3" selected>中心周圍 3 公里（最大）</option></select></div>
+                <div class="map-fixed-radius">固定下載中心周圍 3 公里</div>
                 <div id="replaceMapField" class="field replace-map-field" hidden><label for="replaceMapSelect">三組已滿，下載完成後取代</label><select id="replaceMapSelect"></select></div>
                 <div class="form-actions"><button id="downloadMap" class="btn" type="submit">建立並下載</button><button id="cancelNewMap" class="btn ghost" type="button">取消</button></div>
                 <div id="mapDownloadStatus" class="map-download-status" role="status"></div>
@@ -424,6 +426,7 @@
       let switchingMap = false;
       let screenshots = [];
       let screenshotIndex = 0;
+      let editingMapId = null;
       const markerById = new Map();
 
       const map = L.map('map', {
@@ -441,7 +444,7 @@
 
       $('addSpot').addEventListener('click', startAddingSpot);
       $('toggleMapManager').addEventListener('click', toggleMapManagerPanel);
-      $('showNewMapForm').addEventListener('click', openNewMapForm);
+      $('showNewMapForm').addEventListener('click', () => openNewMapForm());
       $('cancelNewMap').addEventListener('click', closeNewMapForm);
       $('newMapForm').addEventListener('submit', createOfflineMap);
       $('useCurrentLocation').addEventListener('click', useCurrentLocation);
@@ -593,14 +596,19 @@
         if (!panel.hidden) renderMapManager();
       }
 
-      function openNewMapForm() {
+      function openNewMapForm(mapId = null) {
+        editingMapId = typeof mapId === 'string' ? mapId : null;
+        const editingProfile = editingMapId
+          ? offlineMaps.profiles.find(profile => profile.id === editingMapId)
+          : null;
         $('mapManagerPanel').hidden = false;
         $('toggleMapManager').textContent = '收合';
         $('newMapForm').hidden = false;
-        $('newMapName').value = '';
-        $('centerLat').value = activeMapProfile.center[0];
-        $('centerLng').value = activeMapProfile.center[1];
-        $('mapRadius').value = '3';
+        $('mapFormTitle').textContent = editingProfile ? `修改「${editingProfile.name}」` : '建立並下載離線地圖';
+        $('downloadMap').textContent = editingProfile ? '下載並更新' : '建立並下載';
+        $('newMapName').value = editingProfile?.name || '';
+        $('centerLat').value = (editingProfile || activeMapProfile).center[0];
+        $('centerLng').value = (editingProfile || activeMapProfile).center[1];
         $('mapDownloadStatus').textContent = '';
         renderReplacementOptions();
         setTimeout(() => $('newMapName').focus(), 40);
@@ -609,11 +617,13 @@
       function closeNewMapForm() {
         $('newMapForm').hidden = true;
         $('mapDownloadStatus').textContent = '';
+        editingMapId = null;
       }
 
       function renderReplacementOptions() {
         const replaceField = $('replaceMapField');
-        replaceField.hidden = offlineMaps.canAddMap;
+        const needsChoice = !editingMapId && !offlineMaps.hasBuiltInMap && !offlineMaps.canAddMap;
+        replaceField.hidden = !needsChoice;
         const select = $('replaceMapSelect');
         select.innerHTML = offlineMaps.replaceableProfiles
           .map(profile => `<option value="${escapeHtml(profile.id)}">取代「${escapeHtml(profile.name)}」及其花點</option>`)
@@ -631,13 +641,14 @@
             name: $('newMapName').value,
             lat: $('centerLat').value,
             lng: $('centerLng').value,
-            radiusKm: $('mapRadius').value,
-            replaceId: offlineMaps.canAddMap ? null : $('replaceMapSelect').value,
+            radiusKm: 3,
+            replaceId: editingMapId || (!offlineMaps.hasBuiltInMap && !offlineMaps.canAddMap ? $('replaceMapSelect').value : null),
             onStatus: message => { status.textContent = message; }
           });
           activeMapProfile = { ...profile, id: '__loading__' };
           await switchOfflineMap(profile.id);
           $('newMapForm').hidden = true;
+          editingMapId = null;
           showMapMessage(`「${profile.name}」已下載，可離線使用`);
         } catch (error) {
           status.textContent = error.message || '離線地圖建立失敗。';
@@ -688,16 +699,19 @@
           return `<button class="map-slot ${profile.id === active.id ? 'active' : ''}" type="button" data-map-id="${escapeHtml(profile.id)}">${index + 1} ${escapeHtml(profile.name)}</button>`;
         }).join('');
         $('mapSlots').querySelectorAll('[data-map-id]').forEach(button => button.addEventListener('click', () => switchOfflineMap(button.dataset.mapId)));
-        $('mapSlots').querySelectorAll('[data-action="new"]').forEach(button => button.addEventListener('click', openNewMapForm));
+        $('mapSlots').querySelectorAll('[data-action="new"]').forEach(button => button.addEventListener('click', () => openNewMapForm()));
 
         $('mapManagerList').innerHTML = profiles.map((profile, index) => `
           <div class="map-manager-item">
             <div><div class="map-manager-name">地圖 ${index + 1}・${escapeHtml(profile.name)}${profile.id === active.id ? '（使用中）' : ''}</div>
-            <div class="map-manager-meta">中心 ${profile.center[0].toFixed(5)}, ${profile.center[1].toFixed(5)}・${profile.builtIn ? '內建離線圖' : `${profile.radiusKm} km・${OfflineMapManager.formatBytes(profile.sizeBytes)}`}</div></div>
-            ${profile.builtIn ? '' : `<button class="mini delete" type="button" data-delete-map="${escapeHtml(profile.id)}">刪除</button>`}
+            <div class="map-manager-meta">中心 ${profile.center[0].toFixed(5)}, ${profile.center[1].toFixed(5)}・${profile.builtIn ? '首次使用預設圖' : `${profile.radiusKm} km・${OfflineMapManager.formatBytes(profile.sizeBytes)}`}</div></div>
+            <div class="map-manager-actions"><button class="mini" type="button" data-edit-map="${escapeHtml(profile.id)}">修改</button>${!profile.builtIn && profiles.length > 1 ? `<button class="mini delete" type="button" data-delete-map="${escapeHtml(profile.id)}">刪除</button>` : ''}</div>
           </div>`).join('');
+        $('mapManagerList').querySelectorAll('[data-edit-map]').forEach(button => button.addEventListener('click', () => openNewMapForm(button.dataset.editMap)));
         $('mapManagerList').querySelectorAll('[data-delete-map]').forEach(button => button.addEventListener('click', () => deleteOfflineMap(button.dataset.deleteMap)));
-        $('showNewMapForm').textContent = offlineMaps.canAddMap ? '＋ 建立離線地圖' : '＋ 建立並取代自訂地圖';
+        $('showNewMapForm').textContent = offlineMaps.hasBuiltInMap
+          ? '設定我的第一張地圖'
+          : (offlineMaps.canAddMap ? '＋ 建立離線地圖' : '＋ 建立並取代地圖');
         renderReplacementOptions();
         offlineMaps.storageEstimate().then(estimate => {
           $('mapStorageSummary').textContent = estimate

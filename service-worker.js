@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pikmin-flower-ios-v4';
+const CACHE_NAME = 'pikmin-flower-ios-v5';
 const APP_FILES = [
   './',
   './index.html',

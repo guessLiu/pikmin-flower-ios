@@ -32,9 +32,9 @@
 
     async initialize() {
       this.profiles = this._loadProfiles();
-      this.activeMapId = localStorage.getItem(ACTIVE_KEY) || DEFAULT_ID;
+      this.activeMapId = localStorage.getItem(ACTIVE_KEY) || this.profiles[0]?.id || DEFAULT_ID;
       if (!this.profiles.some(profile => profile.id === this.activeMapId)) {
-        this.activeMapId = DEFAULT_ID;
+        this.activeMapId = this.profiles[0]?.id || DEFAULT_ID;
       }
       this._migrateLegacySpots();
       this._saveProfiles();
@@ -54,8 +54,12 @@
       return this.profiles.length < MAX_MAPS;
     }
 
+    get hasBuiltInMap() {
+      return this.profiles.some(profile => profile.builtIn);
+    }
+
     get replaceableProfiles() {
-      return this.profiles.filter(profile => !profile.builtIn);
+      return [...this.profiles];
     }
 
     async getMapData(mapId) {
@@ -106,20 +110,27 @@
       lng = Number(lng);
       radiusKm = Number(radiusKm);
       if (!validLatLng(lat, lng)) throw new Error('請輸入正確的中心經緯度。');
-      if (![2, 3].includes(radiusKm)) throw new Error('離線範圍只支援 2 或 3 公里。');
-      if (!this.canAddMap) {
-        const replacement = this.profiles.find(profile => profile.id === replaceId && !profile.builtIn);
-        if (!replacement) throw new Error('已達三組上限，請選擇要取代的自訂地圖。');
+      if (radiusKm !== 3) throw new Error('離線地圖固定為中心周圍 3 公里。');
+
+      const builtInProfile = this.profiles.find(profile => profile.builtIn);
+      const replacementId = replaceId || builtInProfile?.id || null;
+      const replacementIndex = replacementId
+        ? this.profiles.findIndex(profile => profile.id === replacementId)
+        : -1;
+      if (replacementId && replacementIndex < 0) throw new Error('找不到要取代的離線地圖。');
+      if (!this.canAddMap && replacementIndex < 0) {
+        throw new Error('已達三組上限，請選擇要取代的地圖。');
       }
+      const replacement = replacementIndex >= 0 ? this.profiles[replacementIndex] : null;
 
       const bounds = boundsFor(lat, lng, radiusKm);
-      onStatus('正在向地圖服務取得資料，通常需要 10～60 秒…');
-      const data = await this._downloadMapData(bounds);
+      onStatus('正在向地圖服務取得 3 公里圖資，通常需要 10～90 秒…');
+      const data = await this._downloadMapData(bounds, onStatus);
       const serialized = JSON.stringify(data);
       const sizeBytes = new Blob([serialized]).size;
       if (!data.features.length) throw new Error('這個範圍沒有取得可用地圖資料，請稍後再試。');
       if (sizeBytes > MAX_DATA_BYTES) {
-        throw new Error(`地圖資料 ${formatBytes(sizeBytes)} 太大，請改選較小範圍。`);
+        throw new Error(`這個地區的 3 公里圖資為 ${formatBytes(sizeBytes)}，超過單張地圖安全上限。`);
       }
 
       onStatus(`已取得 ${data.features.length.toLocaleString()} 個圖徵，正在儲存離線地圖…`);
@@ -127,7 +138,7 @@
       const now = Date.now();
       const profile = {
         id,
-        name: String(name || '').trim().slice(0, 20) || `地圖 ${this.profiles.length + 1}`,
+        name: String(name || '').trim().slice(0, 20) || `地圖 ${(replacementIndex >= 0 ? replacementIndex : this.profiles.length) + 1}`,
         center: [lat, lng],
         viewCenter: [lat, lng],
         bounds,
@@ -136,7 +147,7 @@
         builtIn: false,
         sizeBytes,
         featureCount: data.features.length,
-        createdAt: now,
+        createdAt: replacement?.createdAt || now,
         updatedAt: now,
         lastUsedAt: now
       };
@@ -144,16 +155,10 @@
       await this._putDataset(id, data);
       const oldProfiles = [...this.profiles];
       const oldActive = this.activeMapId;
-      let replaced = null;
       try {
-        if (this.canAddMap) {
-          this.profiles = [...this.profiles, profile];
-        } else {
-          const index = this.profiles.findIndex(item => item.id === replaceId && !item.builtIn);
-          if (index < 0) throw new Error('找不到要取代的自訂地圖。');
-          replaced = this.profiles[index];
-          this.profiles = this.profiles.map((item, itemIndex) => itemIndex === index ? profile : item);
-        }
+        this.profiles = replacementIndex >= 0
+          ? this.profiles.map((item, itemIndex) => itemIndex === replacementIndex ? profile : item)
+          : [...this.profiles, profile];
         this.activeMapId = id;
         this._saveProfiles();
         localStorage.setItem(ACTIVE_KEY, id);
@@ -164,9 +169,9 @@
         throw error;
       }
 
-      if (replaced) {
-        await this._deleteDataset(replaced.id).catch(() => {});
-        localStorage.removeItem(this._spotKey(replaced.id));
+      if (replacement) {
+        if (!replacement.builtIn) await this._deleteDataset(replacement.id).catch(() => {});
+        localStorage.removeItem(this._spotKey(replacement.id));
       }
       this._requestPersistence();
       return profile;
@@ -175,9 +180,10 @@
     async deleteMap(mapId) {
       const profile = this.profiles.find(item => item.id === mapId);
       if (!profile) return this.activeProfile;
-      if (profile.builtIn) throw new Error('原始地圖是離線備用地圖，不能刪除。');
+      if (profile.builtIn) throw new Error('預設地圖請直接用新位置取代。');
+      if (this.profiles.length <= 1) throw new Error('至少需要保留一組離線地圖。');
       this.profiles = this.profiles.filter(item => item.id !== mapId);
-      if (this.activeMapId === mapId) this.activeMapId = DEFAULT_ID;
+      if (this.activeMapId === mapId) this.activeMapId = this.profiles[0].id;
       this._saveProfiles();
       localStorage.setItem(ACTIVE_KEY, this.activeMapId);
       await this._deleteDataset(mapId).catch(() => {});
@@ -202,7 +208,10 @@
         if (Array.isArray(value)) stored = value.map(normalizeProfile).filter(Boolean);
       } catch {}
 
-      const custom = stored.filter(profile => !profile.builtIn && profile.id !== DEFAULT_ID).slice(0, MAX_MAPS - 1);
+      const customOnly = stored.filter(profile => !profile.builtIn).slice(0, MAX_MAPS);
+      if (customOnly.length && !stored.some(profile => profile.builtIn)) return customOnly;
+
+      const custom = customOnly.filter(profile => profile.id !== DEFAULT_ID).slice(0, MAX_MAPS - 1);
       const existingDefault = stored.find(profile => profile.id === DEFAULT_ID);
       const defaultProfile = {
         id: DEFAULT_ID,
@@ -223,6 +232,7 @@
     }
 
     _migrateLegacySpots() {
+      if (!this.profiles.some(profile => profile.id === DEFAULT_ID)) return;
       const target = this._spotKey(DEFAULT_ID);
       if (localStorage.getItem(target) !== null) return;
       for (const key of LEGACY_SPOT_KEYS) {
@@ -245,7 +255,32 @@
       return `${SPOTS_PREFIX}${mapId}`;
     }
 
-    async _downloadMapData(bounds) {
+    async _downloadMapData(bounds, onStatus = () => {}) {
+      onStatus('正在下載 3 公里離線地圖…');
+      return this._downloadMapChunk(bounds);
+    }
+
+    async _downloadMapChunk(bounds, endpointOffset = 0) {
+      const customEndpoint = window.PIKMIN_OVERPASS_ENDPOINT;
+      const endpoints = customEndpoint
+        ? [customEndpoint]
+        : [
+            'https://overpass-api.de/api/interpreter',
+            'https://overpass.kumi.systems/api/interpreter'
+          ];
+      let lastError = null;
+      for (let attempt = 0; attempt < endpoints.length; attempt += 1) {
+        const endpoint = endpoints[(endpointOffset + attempt) % endpoints.length];
+        try {
+          return await this._fetchMapChunk(bounds, endpoint);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError || new Error('無法下載離線地圖。');
+    }
+
+    async _fetchMapChunk(bounds, endpoint) {
       const [[south, west], [north, east]] = bounds;
       const bbox = `${south},${west},${north},${east}`;
       const query = `[out:json][timeout:90];(\n` +
@@ -256,7 +291,6 @@
         `way["landuse"~"grass|recreation_ground|forest|cemetery"](${bbox});\n` +
         `way["leisure"~"park|pitch|playground|garden"](${bbox});\n` +
         `);out geom;`;
-      const endpoint = window.PIKMIN_OVERPASS_ENDPOINT || 'https://overpass-api.de/api/interpreter';
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 120000);
       let response;
@@ -268,7 +302,7 @@
           signal: controller.signal
         });
       } catch (error) {
-        if (error?.name === 'AbortError') throw new Error('下載超過兩分鐘，請稍後再試或縮小範圍。');
+        if (error?.name === 'AbortError') throw new Error('地圖服務回應逾時。');
         throw new Error('無法連上地圖下載服務，請確認網路後再試。');
       } finally {
         clearTimeout(timeout);
