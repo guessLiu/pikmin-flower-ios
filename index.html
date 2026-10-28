@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>大花截圖記錄</title>
+  <meta name="description" content="在 iPhone 上對照 Pikmin Bloom 截圖，批次更新固定大花的剩餘時間。">
+  <meta name="theme-color" content="#2f7d56">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="大花記錄">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./app-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+  <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
+  <style>
+    :root {
+      --ink: #17332a;
+      --muted: #64766f;
+      --cream: #fbfaf2;
+      --paper: rgba(255, 255, 251, .95);
+      --leaf: #2f7d56;
+      --leaf-dark: #205c40;
+      --pink: #ef6f91;
+      --pink-soft: #fff0f4;
+      --yellow: #f4bd45;
+      --red: #db4d55;
+      --line: #dce5de;
+      --shadow: 0 16px 45px rgba(36, 76, 60, .13);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      color: var(--ink);
+      background: var(--cream);
+      font-family: ui-rounded, "SF Pro Rounded", "Noto Sans TC", system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    .app { display: grid; grid-template-columns: 390px 1fr; height: 100%; }
+    .panel {
+      position: relative;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(244, 189, 69, .18), transparent 27%),
+        radial-gradient(circle at 100% 15%, rgba(239, 111, 145, .14), transparent 30%),
+        var(--cream);
+      border-right: 1px solid var(--line);
+      box-shadow: 8px 0 30px rgba(29, 61, 49, .06);
+    }
+    .brand { padding: 22px 22px 14px; }
+    .eyebrow { color: var(--leaf); font-size: 12px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { margin: 5px 0 5px; font-size: 27px; line-height: 1.15; letter-spacing: -.02em; }
+    .brand p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+    .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; padding: 0 16px 14px; }
+    .tab {
+      padding: 9px 5px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--muted);
+      background: rgba(255,255,255,.55);
+      font-size: 13px;
+      font-weight: 750;
+    }
+    .tab.active { border-color: var(--leaf); color: white; background: var(--leaf); box-shadow: 0 7px 18px rgba(47,125,86,.2); }
+
+    .content { padding: 0 16px 24px; overflow: auto; overscroll-behavior: contain; }
+    .section { display: none; }
+    .section.active { display: block; }
+    .card { padding: 15px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); box-shadow: 0 8px 24px rgba(37,73,59,.055); }
+    .card + .card { margin-top: 12px; }
+    .card h2 { margin: 0 0 4px; font-size: 16px; }
+    .hint { margin: 0 0 13px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    .field { margin: 11px 0; }
+    .field label { display: block; margin-bottom: 5px; color: #53675f; font-size: 12px; font-weight: 750; }
+    .field input, .field select {
+      width: 100%; min-height: 40px; padding: 9px 10px;
+      border: 1px solid #cedbd3; border-radius: 11px; outline: none;
+      color: var(--ink); background: #fff;
+    }
+    .field input:focus, .field select:focus { border-color: var(--leaf); box-shadow: 0 0 0 3px rgba(47,125,86,.1); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      min-height: 39px; padding: 8px 13px; border: 0; border-radius: 11px;
+      color: white; background: var(--leaf); font-weight: 800; font-size: 13px;
+    }
+    .btn:hover { background: var(--leaf-dark); }
+    .btn.secondary { color: var(--leaf); background: #eaf4ee; }
+    .btn.secondary:hover { background: #deeee4; }
+    .btn.ghost { color: var(--muted); background: transparent; border: 1px solid var(--line); }
+    .btn.danger { color: var(--red); background: #fff0f0; }
+    .btn.wide { width: 100%; justify-content: center; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .map-wrap { position: relative; min-width: 0; }
+    #map { width: 100%; height: 100%; background: #dfe9dd; }
+    #map { background: #f4f1e8; }
+    .map-tip {
+      position: absolute; z-index: 600; top: 14px; left: 50%; transform: translateX(-50%);
+      max-width: calc(100% - 30px); padding: 9px 13px; border-radius: 999px;
+      color: white; background: rgba(23, 51, 42, .9); box-shadow: var(--shadow);
+      font-size: 12px; font-weight: 750; pointer-events: none; opacity: 0; transition: .2s;
+    }
+    .map-tip.show { opacity: 1; }
+
+    .flower-list { margin-top: 12px; display: grid; gap: 8px; }
+    .flower-item { padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.82); }
+    .flower-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .flower-name { font-size: 14px; font-weight: 850; }
+    .flower-meta { margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .flower-actions { display: flex; gap: 5px; margin-top: 9px; }
+    .mini { padding: 5px 8px; border: 0; border-radius: 8px; color: var(--leaf); background: #edf5f0; font-size: 11px; font-weight: 800; }
+    .mini.delete { color: var(--red); background: #fff0f0; }
+    .badge { flex: none; padding: 4px 7px; border-radius: 999px; font-size: 10px; font-weight: 850; }
+    .badge.good { color: #17633f; background: #dff3e7; }
+    .badge.soon { color: #875d00; background: #fff0c9; }
+    .badge.urgent { color: #a72831; background: #ffe0e2; }
+    .badge.harvest { color: #5d3aa5; background: #eee7ff; }
+    .badge.expired { color: #6d7571; background: #e8ece9; }
+    .badge.inactive { color: #6d7571; background: #eef1ef; }
+    .selection-box { margin: 10px 0; padding: 10px 12px; border: 1px solid #cfe0d5; border-radius: 11px; color: var(--leaf-dark); background: #edf6f0; font-size: 13px; font-weight: 800; }
+
+    .empty { padding: 25px 12px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .statline { display: flex; gap: 8px; margin: 10px 0 3px; }
+    .stat { flex: 1; padding: 10px; border-radius: 12px; background: #eef5ef; }
+    .stat b { display: block; font-size: 18px; }
+    .stat span { color: var(--muted); font-size: 10px; }
+    .route-stop { display: grid; grid-template-columns: 28px 1fr; gap: 9px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+    .route-stop:last-child { border-bottom: 0; }
+    .stop-no { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; color: #fff; background: var(--pink); font-size: 11px; font-weight: 900; }
+    .stop-title { font-size: 13px; font-weight: 850; }
+    .stop-meta { color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .notice { margin-top: 10px; padding: 10px 11px; border-radius: 11px; color: #6c581e; background: #fff7dc; font-size: 11px; line-height: 1.5; }
+    .file-label { display: inline-flex; align-items: center; }
+    .file-label input { display: none; }
+
+    .custom-marker { border: 0; background: none; }
+    .marker-stack {
+      position: relative;
+      width: 92px;
+      height: 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    .marker-time {
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 48px;
+      padding: 3px 7px;
+      border: 2px solid #fff;
+      border-radius: 999px;
+      color: #fff;
+      background: var(--leaf);
+      box-shadow: 0 3px 9px rgba(24,66,49,.22);
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.2;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .marker-time.soon { color: #654500; background: var(--yellow); }
+    .marker-time.urgent { background: var(--red); }
+    .marker-time.harvest { background: #7656c9; }
+    .marker-time.expired { background: #7f8984; }
+    .flower-pin {
+      position: relative; width: 38px; height: 38px; display: grid; place-items: center;
+      border: 3px solid white; border-radius: 50% 50% 50% 8px;
+      transform: rotate(-45deg); box-shadow: 0 5px 13px rgba(24,66,49,.28);
+      background: var(--pink);
+    }
+    .flower-pin span { transform: rotate(45deg); font-size: 20px; }
+    .flower-pin.soon { background: var(--yellow); }
+    .flower-pin.urgent { background: var(--red); }
+    .flower-pin.harvest { background: #8a70ce; }
+    .flower-pin.expired { background: #929b96; filter: grayscale(1); opacity: .76; }
+    .inactive-spot { width: 30px; height: 30px; display: grid; place-items: center; }
+    .inactive-spot::after { content: ''; width: 11px; height: 11px; border: 2px solid #fff; border-radius: 50%; background: #8d9691; box-shadow: 0 2px 7px rgba(24,49,40,.32); }
+    .center-pin { width: 36px; height: 36px; display: grid; place-items: center; border: 4px solid #fff; border-radius: 50%; color: white; background: #367de0; box-shadow: 0 5px 16px rgba(25,70,130,.38); font-size: 16px; font-weight: 900; }
+    .leaflet-popup-content-wrapper { border-radius: 14px; }
+    .map-label {
+      padding: 1px 4px;
+      border: 0;
+      border-radius: 4px;
+      color: #53655e;
+      background: rgba(255,255,250,.72);
+      box-shadow: none;
+      font-size: 9px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .map-label::before { display: none; }
+    .popup-name { font-weight: 850; }
+    .popup-sub { margin-top: 4px; color: #5f716a; font-size: 12px; }
+
+    .batch-launch {
+      position: absolute; z-index: 820; top: max(14px, env(safe-area-inset-top)); left: 14px;
+      display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 9px 13px;
+      border: 2px solid #fff; border-radius: 999px; color: #fff; background: var(--leaf);
+      box-shadow: 0 6px 20px rgba(26,65,49,.28); font-size: 13px; font-weight: 850; cursor: pointer;
+    }
+    .batch-launch input { display: none; }
+    .batch-dock {
+      position: absolute; z-index: 830; top: max(66px, calc(env(safe-area-inset-top) + 52px)); right: 14px;
+      width: min(330px, 42vw); padding: 10px; border: 2px solid rgba(255,255,255,.96); border-radius: 18px;
+      background: rgba(20,40,33,.94); box-shadow: 0 16px 42px rgba(16,35,28,.35); color: #fff;
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    }
+    .batch-dock[hidden], .quick-entry[hidden] { display: none; }
+    .batch-head, .batch-nav { display: flex; align-items: center; justify-content: space-between; gap: 7px; }
+    .batch-title { min-width: 0; font-size: 12px; font-weight: 850; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .batch-icon-btn { width: 32px; height: 32px; flex: none; border: 0; border-radius: 9px; color: #fff; background: rgba(255,255,255,.15); font-weight: 900; }
+    .batch-preview-wrap { height: min(42vh, 430px); margin: 8px 0; border-radius: 12px; overflow: hidden; background: #0d1713; }
+    .batch-preview { width: 100%; height: 100%; display: block; object-fit: contain; cursor: zoom-in; }
+    .batch-dock.expanded { inset: max(10px, env(safe-area-inset-top)) 10px max(10px, env(safe-area-inset-bottom)); width: auto; }
+    .batch-dock.expanded .batch-preview-wrap { height: calc(100% - 82px); }
+    .batch-dock.expanded .batch-preview { cursor: zoom-out; }
+    .batch-counter { flex: 1; text-align: center; font-size: 12px; font-weight: 800; }
+    .batch-remove { margin-top: 7px; width: 100%; padding: 7px; border: 0; border-radius: 9px; color: #ffd7dc; background: rgba(219,77,85,.2); font-size: 11px; font-weight: 800; }
+
+    .quick-entry {
+      position: absolute; z-index: 825; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+      width: min(520px, calc(100% - 28px)); padding: 11px; border: 2px solid rgba(255,255,255,.96); border-radius: 18px;
+      background: rgba(255,255,251,.97); box-shadow: 0 15px 42px rgba(18,48,36,.28);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    }
+    .quick-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .quick-name { font-size: 13px; font-weight: 900; }
+    .quick-close { width: 29px; height: 29px; border: 0; border-radius: 8px; color: var(--muted); background: #eef2ef; font-weight: 900; }
+    .quick-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .quick-time { width: 100%; min-width: 0; min-height: 46px; padding: 9px 12px; border: 2px solid #bed4c6; border-radius: 12px; outline: none; color: var(--ink); background: #fff; font-size: 20px; font-weight: 850; }
+    .quick-time:focus { border-color: var(--leaf); box-shadow: 0 0 0 3px rgba(47,125,86,.12); }
+    .quick-save { min-width: 86px; border: 0; border-radius: 12px; color: #fff; background: var(--leaf); font-weight: 900; }
+    .quick-hint { margin-top: 6px; color: var(--muted); font-size: 10px; }
+
+    @media (max-width: 760px) {
+      body { overflow: auto; }
+      .app { display: flex; flex-direction: column; min-height: 100%; height: auto; }
+      .panel { height: auto; min-height: 54vh; border-right: 0; border-bottom: 1px solid var(--line); }
+      .content { max-height: none; overflow: visible; }
+      .map-wrap { order: -1; height: 46vh; min-height: 340px; }
+      .brand { padding-top: 17px; }
+      .batch-launch { top: max(9px, env(safe-area-inset-top)); left: 9px; min-height: 39px; padding: 7px 11px; }
+      .batch-dock { top: max(56px, calc(env(safe-area-inset-top) + 47px)); right: 8px; width: 48vw; padding: 8px; border-radius: 15px; }
+      .batch-preview-wrap { height: 31vh; }
+      .quick-entry { bottom: max(8px, env(safe-area-inset-bottom)); width: calc(100% - 16px); }
+      body.batch-active { overflow: hidden; }
+      body.batch-active .app { display: block; width: 100%; height: 100dvh; min-height: 0; }
+      body.batch-active .panel { display: none; }
+      body.batch-active .map-wrap { position: fixed; inset: 0; z-index: 650; width: 100%; height: 100dvh; min-height: 0; }
+      body.batch-active .leaflet-control-zoom { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="panel">
+      <header class="brand">
+        <div class="eyebrow">Neighborhood bloom planner</div>
+        <h1>大花截圖記錄</h1>
+        <p>先在 Pikmin Bloom 截圖，再一次回來對照地圖批次輸入時間。</p>
+      </header>
+
+      <div class="content">
+        <section id="flowers" class="section active">
+          <div class="card">
+            <h2>附近地圖中心</h2>
+            <p class="hint">輸入一個預設點，只載入目前畫面附近的地圖。</p>
+            <div class="grid-2">
+              <div class="field"><label for="centerLat">中心緯度</label><input id="centerLat" type="number" step="any" value="25.005022"></div>
+              <div class="field"><label for="centerLng">中心經度</label><input id="centerLng" type="number" step="any" value="121.514369"></div>
+            </div>
+            <button id="showNearby" class="btn secondary wide">顯示這附近</button>
+          </div>
+
+          <div class="card">
+            <h2>固定開花點</h2>
+            <p class="hint">按下新增，再點地圖上的位置。開花點會一直保留，除非個別刪除。</p>
+            <button id="addSpot" class="btn secondary wide">＋ 新增開花點</button>
+          </div>
+
+          <div class="card" id="timeCard">
+            <h2>記錄開花時間</h2>
+            <p class="hint">點地圖上的 🌼 開花點，再輸入目前剩餘時間。</p>
+            <div id="selectedSpot" class="selection-box">尚未選擇開花點</div>
+            <div class="field">
+              <label for="flowerType">花種／顏色（可留白）</label>
+              <input id="flowerType" placeholder="例如：紅色鬱金香">
+            </div>
+            <div class="field">
+              <label for="remainTime">剩餘時間</label>
+              <input id="remainTime" type="text" inputmode="numeric" autocomplete="off" maxlength="5" value="100" placeholder="例如：40 或 145">
+              <p class="hint">1～2 位數代表分鐘：40＝40 分；3 位數代表時分：145＝1 小時 45 分。</p>
+            </div>
+            <div class="btn-row">
+              <button id="saveBloom" class="btn" disabled>儲存開花時間</button>
+              <button id="clearAllMain" class="btn danger">清除全部記錄</button>
+            </div>
+          </div>
+
+          <div class="statline">
+            <div class="stat"><b id="flowerCount">0</b><span>固定開花點</span></div>
+            <div class="stat"><b id="activeCount">0</b><span>目前可採</span></div>
+          </div>
+          <div id="flowerList" class="flower-list"></div>
+        </section>
+      </div>
+    </aside>
+
+    <section class="map-wrap" aria-label="地圖">
+      <div id="map"></div>
+      <label class="batch-launch" aria-label="選擇 Pikmin 截圖">📷 <span>選截圖</span><input id="screenshotInput" type="file" accept="image/*" multiple></label>
+      <aside id="screenshotDock" class="batch-dock" hidden aria-label="截圖對照視窗">
+        <div class="batch-head">
+          <div id="screenshotName" class="batch-title">Pikmin 截圖</div>
+          <button id="expandScreenshot" class="batch-icon-btn" type="button" aria-label="放大截圖">⛶</button>
+          <button id="closeScreenshots" class="batch-icon-btn" type="button" aria-label="結束批次模式">×</button>
+        </div>
+        <div class="batch-preview-wrap"><img id="screenshotPreview" class="batch-preview" alt="目前 Pikmin 截圖"></div>
+        <div class="batch-nav">
+          <button id="previousScreenshot" class="batch-icon-btn" type="button" aria-label="上一張">‹</button>
+          <div id="screenshotCounter" class="batch-counter">1 / 1</div>
+          <button id="nextScreenshot" class="batch-icon-btn" type="button" aria-label="下一張">›</button>
+        </div>
+        <button id="removeScreenshot" class="batch-remove" type="button">完成並移除這張</button>
+      </aside>
+      <div id="quickEntry" class="quick-entry" hidden>
+        <div class="quick-top"><div id="quickSpotName" class="quick-name">開花點</div><button id="closeQuickEntry" class="quick-close" type="button" aria-label="關閉快速輸入">×</button></div>
+        <div class="quick-row"><input id="quickRemainTime" class="quick-time" type="text" inputmode="numeric" enterkeyhint="done" autocomplete="off" maxlength="5" placeholder="例如 40 或 145"><button id="quickSave" class="quick-save" type="button">儲存</button></div>
+        <div class="quick-hint">40＝40 分；145＝1 小時 45 分。按鍵盤完成／Enter 也會儲存。</div>
+      </div>
+      <div id="mapTip" class="map-tip">請點選地圖位置</div>
+    </section>
+  </main>
+
+  <script src="./vendor/leaflet/leaflet.js"></script>
+  <script src="./local-map-data.js"></script>
+  <script>
+    (() => {
+      const SPOTS_KEY = 'pikmin-flower-ios-spots-v1';
+      const OLD_SPOTS_KEY = 'pikmin-flower-spots-v2';
+      const LEGACY_KEY = 'pikmin-flower-route-v1';
+      const CENTER_KEY = 'pikmin-flower-ios-center-v1';
+      const OLD_CENTER_KEY = 'pikmin-flower-center-v1';
+      const DEFAULT_CENTER = [25.005022, 121.514369];
+      const HARVEST_GRACE_MINUTES = 60;
+      let spots = loadSpots();
+      let selectedSpotId = null;
+      let pickMode = null;
+      let centerMarker = null;
+      let screenshots = [];
+      let screenshotIndex = 0;
+      const markerById = new Map();
+
+      const $ = id => document.getElementById(id);
+      const map = L.map('map', {
+        zoomControl: false,
+        preferCanvas: true,
+        minZoom: 14,
+        maxZoom: 19,
+        maxBounds: [[24.986, 121.491], [25.024, 121.537]],
+        maxBoundsViscosity: 0.8
+      }).setView(DEFAULT_CENTER, 16);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      renderLocalBaseMap();
+      map.attributionControl.addAttribution('&copy; OpenStreetMap contributors');
+
+      $('addSpot').addEventListener('click', startAddingSpot);
+      $('showNearby').addEventListener('click', showNearby);
+      $('saveBloom').addEventListener('click', saveBloom);
+      $('remainTime').addEventListener('keydown', event => {
+        if (event.key === 'Enter' && !event.isComposing) {
+          event.preventDefault();
+          saveBloom();
+        }
+      });
+      $('clearAllMain').addEventListener('click', clearBloomRecords);
+      $('screenshotInput').addEventListener('change', loadScreenshots);
+      $('previousScreenshot').addEventListener('click', () => stepScreenshot(-1));
+      $('nextScreenshot').addEventListener('click', () => stepScreenshot(1));
+      $('removeScreenshot').addEventListener('click', removeCurrentScreenshot);
+      $('closeScreenshots').addEventListener('click', clearScreenshots);
+      $('expandScreenshot').addEventListener('click', toggleScreenshotSize);
+      $('screenshotPreview').addEventListener('click', toggleScreenshotSize);
+      $('quickSave').addEventListener('click', saveQuickBloom);
+      $('quickRemainTime').addEventListener('keydown', event => {
+        if (event.key === 'Enter' && !event.isComposing) {
+          event.preventDefault();
+          saveQuickBloom();
+        }
+      });
+      $('closeQuickEntry').addEventListener('click', () => { $('quickEntry').hidden = true; });
+      map.on('click', onMapClick);
+      window.addEventListener('beforeunload', releaseScreenshotUrls);
+
+      const savedCenter = loadCenter();
+      $('centerLat').value = savedCenter[0];
+      $('centerLng').value = savedCenter[1];
+      map.setView(savedCenter, 16);
+      setCenterMarker(savedCenter[0], savedCenter[1]);
+      renderAll();
+      setInterval(renderAll, 30000);
+      registerServiceWorker();
+
+      function loadSpots() {
+        try {
+          const stored = JSON.parse(localStorage.getItem(SPOTS_KEY) || 'null');
+          if (Array.isArray(stored)) return stored.map(normalizeSpot).filter(Boolean);
+          const previous = JSON.parse(localStorage.getItem(OLD_SPOTS_KEY) || 'null');
+          const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) || '[]');
+          const source = Array.isArray(previous) ? previous : legacy;
+          if (!Array.isArray(source)) return [];
+          const migrated = source.map(normalizeSpot).filter(Boolean);
+          localStorage.setItem(SPOTS_KEY, JSON.stringify(migrated));
+          return migrated;
+        } catch { return []; }
+      }
+
+      function normalizeSpot(value) {
+        const lat = Number(value?.lat), lng = Number(value?.lng);
+        if (!validLatLng(lat, lng)) return null;
+        return {
+          id: value.id || makeId(),
+          name: value.name || '開花點',
+          lat,
+          lng,
+          flowerType: value.flowerType || '',
+          observedAt: value.observedAt != null && Number.isFinite(Number(value.observedAt)) ? Number(value.observedAt) : null,
+          expiresAt: value.expiresAt != null && Number.isFinite(Number(value.expiresAt)) ? Number(value.expiresAt) : null,
+          createdAt: Number(value.createdAt) || Date.now()
+        };
+      }
+
+      function renderLocalBaseMap() {
+        if (!window.LOCAL_MAP_DATA) {
+          $('mapTip').textContent = '找不到本機地圖資料 local-map-data.js';
+          $('mapTip').classList.add('show');
+          return;
+        }
+        const renderer = L.canvas({ padding: 0.3 });
+        const areas = window.LOCAL_MAP_DATA.features.filter(f => f.geometry?.type === 'Polygon');
+        const lines = window.LOCAL_MAP_DATA.features.filter(f => f.geometry?.type !== 'Polygon');
+        const addFeatures = features => L.geoJSON({ type:'FeatureCollection', features }, {
+          renderer,
+          style: localMapStyle,
+          onEachFeature: (feature, layer) => {
+            const p = feature.properties || {};
+            const name = p['name:zh'] || p.name;
+            if (!name) return;
+            layer.bindTooltip(escapeHtml(name), { sticky: true, direction: 'top' });
+            const majorRoad = ['motorway','trunk','primary','secondary'].includes(p.highway);
+            const placeArea = p.leisure === 'park' || p.landuse === 'recreation_ground';
+            if (majorRoad || placeArea) {
+              layer.bindTooltip(escapeHtml(name), { permanent: true, direction: 'center', className: 'map-label', opacity: .82 });
+            }
+          }
+        }).addTo(map);
+        addFeatures(areas);
+        addFeatures(lines);
+      }
+
+      function localMapStyle(feature) {
+        const p = feature.properties || {};
+        if (feature.geometry.type === 'Polygon') {
+          if (p.natural === 'water') return { color:'#9dcbd4', weight:1, fillColor:'#cce9ee', fillOpacity:.9 };
+          if (p.landuse === 'forest') return { color:'#a9c5a5', weight:1, fillColor:'#d9ead2', fillOpacity:.8 };
+          if (p.landuse === 'cemetery') return { color:'#b5c9ae', weight:1, fillColor:'#e1eadc', fillOpacity:.78 };
+          if (p.leisure === 'pitch') return { color:'#9abe91', weight:1, fillColor:'#cfe5c6', fillOpacity:.8 };
+          return { color:'#a9caa0', weight:1, fillColor:'#dcefd6', fillOpacity:.82 };
+        }
+        if (p.waterway) return { color:'#79b8c7', weight:2, opacity:.9 };
+        if (p.railway) return { color:'#8f9692', weight:2, opacity:.72, dashArray:'6 5' };
+        if (p.highway) {
+          const kind = p.highway;
+          if (['motorway','trunk'].includes(kind)) return { color:'#df9f75', weight:6, opacity:.92 };
+          if (kind === 'primary') return { color:'#e6ad74', weight:5, opacity:.92 };
+          if (kind === 'secondary') return { color:'#e8c488', weight:4.5, opacity:.94 };
+          if (kind === 'tertiary') return { color:'#eadbb4', weight:4, opacity:.96 };
+          if (['footway','path','cycleway','steps','pedestrian'].includes(kind)) return { color:'#a5b6ad', weight:1.1, opacity:.72, dashArray:'3 3' };
+          if (kind === 'service') return { color:'#c7ccc7', weight:1.2, opacity:.75 };
+          return { color:'#b8c0ba', weight:2.1, opacity:.86 };
+        }
+        return { color:'#c1c8c2', weight:1, opacity:.6 };
+      }
+
+      function loadCenter() {
+        try {
+          const saved = localStorage.getItem(CENTER_KEY);
+          const value = JSON.parse(saved || localStorage.getItem(OLD_CENTER_KEY) || 'null');
+          if (Array.isArray(value) && validLatLng(Number(value[0]), Number(value[1]))) return [Number(value[0]), Number(value[1])];
+        } catch {}
+        return DEFAULT_CENTER;
+      }
+
+      function showNearby() {
+        const lat = Number($('centerLat').value), lng = Number($('centerLng').value);
+        if (!validLatLng(lat, lng)) return alert('請輸入正確的中心經緯度。');
+        localStorage.setItem(CENTER_KEY, JSON.stringify([lat, lng]));
+        map.setView([lat, lng], 16);
+        setCenterMarker(lat, lng);
+      }
+
+      function setCenterMarker(lat, lng) {
+        const icon = L.divIcon({ className: 'custom-marker', html: '<div class="center-pin">H</div>', iconSize: [36,36], iconAnchor: [18,18], popupAnchor: [0,-17] });
+        if (centerMarker) centerMarker.setLatLng([lat, lng]);
+        else centerMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(map).bindPopup('地圖中心');
+      }
+
+      function persist() {
+        localStorage.setItem(SPOTS_KEY, JSON.stringify(spots));
+      }
+
+      function startAddingSpot() {
+        pickMode = 'spot';
+        $('mapTip').textContent = '請點地圖，新增固定開花點';
+        $('mapTip').classList.add('show');
+        document.body.style.cursor = 'crosshair';
+        $('addSpot').textContent = '請點地圖位置…';
+      }
+
+      function onMapClick(e) {
+        if (pickMode !== 'spot') return;
+        const spot = {
+          id: makeId(),
+          name: nextSpotName(),
+          lat: Number(e.latlng.lat.toFixed(6)),
+          lng: Number(e.latlng.lng.toFixed(6)),
+          flowerType: '',
+          observedAt: null,
+          expiresAt: null,
+          createdAt: Date.now()
+        };
+        spots.push(spot);
+        persist();
+        pickMode = null;
+        $('mapTip').classList.remove('show');
+        document.body.style.cursor = '';
+        $('addSpot').textContent = '＋ 新增開花點';
+        renderAll();
+        selectSpot(spot.id, true);
+      }
+
+      function selectSpot(id, scrollToForm = false) {
+        const spot = spots.find(x => x.id === id);
+        if (!spot) return;
+        selectedSpotId = id;
+        $('selectedSpot').textContent = `已選擇：${spot.name}`;
+        $('saveBloom').disabled = false;
+        $('flowerType').value = spot.flowerType || '';
+        const remain = spot.expiresAt ? Math.ceil((spot.expiresAt - Date.now()) / 60000) : 0;
+        const value = remain > 0 ? formatRemainingTimeInput(remain) : '100';
+        $('remainTime').value = value;
+        $('quickSpotName').textContent = spot.name;
+        $('quickRemainTime').value = value;
+        const useQuickEntry = screenshots.length > 0 || window.matchMedia('(max-width: 760px)').matches;
+        if (useQuickEntry) {
+          $('quickEntry').hidden = false;
+          setTimeout(() => { $('quickRemainTime').focus(); $('quickRemainTime').select(); }, 40);
+        } else {
+          if (scrollToForm) $('timeCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          setTimeout(() => { $('remainTime').focus(); $('remainTime').select(); }, 80);
+        }
+      }
+
+      function saveBloom() {
+        saveBloomValue($('remainTime').value, $('flowerType').value.trim(), false);
+      }
+
+      function saveQuickBloom() {
+        const spot = spots.find(x => x.id === selectedSpotId);
+        saveBloomValue($('quickRemainTime').value, spot?.flowerType || '', true);
+      }
+
+      function saveBloomValue(rawValue, flowerType, advanceScreenshot) {
+        const spot = spots.find(x => x.id === selectedSpotId);
+        if (!spot) return alert('請先點地圖上的開花點。');
+        const totalMinutes = parseRemainingTime(rawValue);
+        if (totalMinutes === null) return alert('時間格式不正確。40 代表 40 分，145 代表 1 小時 45 分；分鐘不可超過 59。');
+        spot.flowerType = flowerType;
+        spot.observedAt = Date.now();
+        spot.expiresAt = Date.now() + totalMinutes * 60000;
+        const normalized = formatRemainingTimeInput(totalMinutes);
+        $('remainTime').value = normalized;
+        $('quickRemainTime').value = normalized;
+        persist();
+        renderAll();
+        if (advanceScreenshot) map.closePopup();
+        else markerById.get(spot.id)?.openPopup();
+        if (advanceScreenshot && screenshotIndex < screenshots.length - 1) {
+          screenshotIndex += 1;
+          renderScreenshot();
+        }
+      }
+
+      function deleteSpot(id) {
+        const spot = spots.find(x => x.id === id);
+        if (!spot || !confirm(`刪除固定開花點「${spot.name}」？這會同時刪除它目前的時間記錄。`)) return;
+        spots = spots.filter(x => x.id !== id);
+        if (selectedSpotId === id) {
+          selectedSpotId = null;
+          $('selectedSpot').textContent = '尚未選擇開花點';
+          $('saveBloom').disabled = true;
+          $('flowerType').value = '';
+          $('remainTime').value = '100';
+          $('quickEntry').hidden = true;
+        }
+        persist();
+        renderAll();
+      }
+
+      function focusSpot(id) {
+        const spot = spots.find(x => x.id === id);
+        if (!spot) return;
+        map.setView([spot.lat, spot.lng], 17);
+        markerById.get(id)?.openPopup();
+      }
+
+      function renderAll() {
+        renderMarkers();
+        renderList();
+        $('flowerCount').textContent = spots.length;
+        $('activeCount').textContent = spots.filter(isCollectible).length;
+      }
+
+      function renderMarkers() {
+        markerById.forEach(m => map.removeLayer(m));
+        markerById.clear();
+        spots.forEach(spot => {
+          const state = timeState(spot.expiresAt);
+          const hasTime = Number.isFinite(spot.expiresAt);
+          const icon = hasTime
+            ? L.divIcon({
+                className: 'custom-marker',
+                html: `<div class="marker-stack"><div class="marker-time ${state.cls}">${escapeHtml(markerTime(spot.expiresAt))}</div><div class="flower-pin ${state.cls}"><span>🌼</span></div></div>`,
+                iconSize: [92, 60], iconAnchor: [46, 58], popupAnchor: [0, -56]
+              })
+            : L.divIcon({
+                className: 'custom-marker',
+                html: '<div class="inactive-spot"></div>',
+                iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -13]
+              });
+          const popup = document.createElement('div');
+          popup.innerHTML = `<div class="popup-name">${escapeHtml(spot.name)}</div><div class="popup-sub">${escapeHtml(spot.flowerType || '未記錄花種')}<br>${escapeHtml(state.label)}</div>`;
+          const deleteButton = document.createElement('button');
+          deleteButton.className = 'mini delete';
+          deleteButton.style.marginTop = '8px';
+          deleteButton.textContent = '刪除此開花點';
+          deleteButton.addEventListener('click', () => deleteSpot(spot.id));
+          popup.appendChild(deleteButton);
+          const marker = L.marker([spot.lat, spot.lng], { icon }).addTo(map).bindPopup(popup);
+          marker.on('click', () => selectSpot(spot.id));
+          markerById.set(spot.id, marker);
+        });
+      }
+
+      function renderList() {
+        const root = $('flowerList');
+        if (!spots.length) {
+          root.innerHTML = '<div class="empty">尚未建立固定開花點。<br>按「新增開花點」，再點地圖上的位置。</div>';
+          return;
+        }
+        const sorted = [...spots].sort((a,b) => {
+          const aActive = isCollectible(a), bActive = isCollectible(b);
+          if (aActive !== bActive) return aActive ? -1 : 1;
+          if (a.expiresAt && b.expiresAt) return a.expiresAt - b.expiresAt;
+          return a.createdAt - b.createdAt;
+        });
+        root.innerHTML = sorted.map(spot => {
+          const state = timeState(spot.expiresAt);
+          return `<article class="flower-item">
+            <div class="flower-top"><div><div class="flower-name">${escapeHtml(spot.name)}</div><div class="flower-meta">${escapeHtml(spot.flowerType || '未記錄花種')} · ${spot.lat.toFixed(5)}, ${spot.lng.toFixed(5)}</div></div><span class="badge ${state.cls}">${escapeHtml(state.label)}</span></div>
+            <div class="flower-actions"><button class="mini" data-action="focus" data-id="${spot.id}">看地圖</button><button class="mini" data-action="record" data-id="${spot.id}">輸入時間</button><button class="mini delete" data-action="delete" data-id="${spot.id}">刪除地點</button></div>
+          </article>`;
+        }).join('');
+        root.querySelectorAll('button').forEach(btn => btn.addEventListener('click', () => {
+          if (btn.dataset.action === 'focus') focusSpot(btn.dataset.id);
+          if (btn.dataset.action === 'record') selectSpot(btn.dataset.id, true);
+          if (btn.dataset.action === 'delete') deleteSpot(btn.dataset.id);
+        }));
+      }
+
+      function loadScreenshots(event) {
+        const files = [...(event.target.files || [])].filter(file => file.type.startsWith('image/'));
+        if (!files.length) return;
+        const wasEmpty = screenshots.length === 0;
+        files.forEach(file => screenshots.push({ name: file.name || 'Pikmin 截圖', url: URL.createObjectURL(file) }));
+        if (wasEmpty) screenshotIndex = 0;
+        event.target.value = '';
+        $('screenshotDock').hidden = false;
+        document.body.classList.add('batch-active');
+        renderScreenshot();
+        setTimeout(() => map.invalidateSize(), 80);
+      }
+
+      function renderScreenshot() {
+        if (!screenshots.length) return clearScreenshots();
+        screenshotIndex = Math.max(0, Math.min(screenshotIndex, screenshots.length - 1));
+        const current = screenshots[screenshotIndex];
+        $('screenshotPreview').src = current.url;
+        $('screenshotName').textContent = current.name;
+        $('screenshotCounter').textContent = `${screenshotIndex + 1} / ${screenshots.length}`;
+        $('previousScreenshot').disabled = screenshots.length < 2;
+        $('nextScreenshot').disabled = screenshots.length < 2;
+      }
+
+      function stepScreenshot(direction) {
+        if (screenshots.length < 2) return;
+        screenshotIndex = (screenshotIndex + direction + screenshots.length) % screenshots.length;
+        renderScreenshot();
+      }
+
+      function removeCurrentScreenshot() {
+        if (!screenshots.length) return;
+        URL.revokeObjectURL(screenshots[screenshotIndex].url);
+        screenshots.splice(screenshotIndex, 1);
+        if (screenshotIndex >= screenshots.length) screenshotIndex = Math.max(0, screenshots.length - 1);
+        renderScreenshot();
+      }
+
+      function clearScreenshots() {
+        releaseScreenshotUrls();
+        screenshots = [];
+        screenshotIndex = 0;
+        $('screenshotPreview').removeAttribute('src');
+        $('screenshotDock').hidden = true;
+        $('screenshotDock').classList.remove('expanded');
+        $('quickEntry').hidden = true;
+        document.body.classList.remove('batch-active');
+        setTimeout(() => map.invalidateSize(), 80);
+      }
+
+      function toggleScreenshotSize() {
+        $('screenshotDock').classList.toggle('expanded');
+      }
+
+      function releaseScreenshotUrls() {
+        screenshots.forEach(item => URL.revokeObjectURL(item.url));
+      }
+
+      function registerServiceWorker() {
+        if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+        window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
+      }
+
+      function clearBloomRecords() {
+        const recorded = spots.filter(spot => spot.expiresAt);
+        if (!recorded.length) return alert('目前沒有開花時間記錄。固定開花點仍保留在地圖上。');
+        if (!confirm('確定清除全部開花時間？固定開花點不會被刪除。')) return;
+        spots.forEach(spot => {
+          spot.flowerType = '';
+          spot.observedAt = null;
+          spot.expiresAt = null;
+        });
+        persist();
+        renderAll();
+        if (selectedSpotId) selectSpot(selectedSpotId);
+      }
+
+      function isCollectible(spot) {
+        return Number.isFinite(spot.expiresAt) && spot.expiresAt + HARVEST_GRACE_MINUTES * 60000 > Date.now();
+      }
+
+      function timeState(expiresAt) {
+        if (!Number.isFinite(expiresAt)) return { cls: 'inactive', label: '未記錄' };
+        const mins = Math.ceil((expiresAt - Date.now()) / 60000);
+        if (mins <= 0) {
+          const ended = Math.floor((Date.now() - expiresAt) / 60000);
+          if (ended < HARVEST_GRACE_MINUTES) return { cls: 'harvest', label: `結束 ${ended} 分・可採` };
+          return { cls: 'expired', label: '已逾 1 小時' };
+        }
+        if (mins <= 60) return { cls: 'urgent', label: `剩 ${mins} 分` };
+        if (mins <= 180) return { cls: 'soon', label: `剩 ${formatMinutes(mins)}` };
+        return { cls: 'good', label: `剩 ${formatMinutes(mins)}` };
+      }
+
+      function markerTime(expiresAt) {
+        if (!Number.isFinite(expiresAt)) return '點我輸入';
+        const mins = Math.ceil((expiresAt - Date.now()) / 60000);
+        if (mins <= 0) {
+          const ended = Math.floor((Date.now() - expiresAt) / 60000);
+          return ended < HARVEST_GRACE_MINUTES ? `結束${ended}分` : '已逾1時';
+        }
+        if (mins < 60) return `剩${mins}分`;
+        const hours = Math.floor(mins / 60);
+        const rest = mins % 60;
+        return rest ? `剩${hours}時${rest}分` : `剩${hours}時`;
+      }
+
+      function nextSpotName() {
+        let max = 0;
+        spots.forEach(spot => {
+          const match = /^(?:大花|開花點)\s*(\d+)$/.exec(spot.name || '');
+          if (match) max = Math.max(max, Number(match[1]));
+        });
+        return `開花點 ${max + 1}`;
+      }
+
+      function makeId() {
+        return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+      }
+
+      function parseRemainingTime(value) {
+        const raw = String(value ?? '').trim();
+        let hours = 0;
+        let minutes = 0;
+        const colon = raw.match(/^(\d{1,2}):(\d{1,2})$/);
+        if (colon) {
+          hours = Number(colon[1]);
+          minutes = Number(colon[2]);
+        } else if (/^\d{1,2}$/.test(raw)) {
+          minutes = Number(raw);
+        } else if (/^\d{3,4}$/.test(raw)) {
+          hours = Number(raw.slice(0, -2));
+          minutes = Number(raw.slice(-2));
+        } else {
+          return null;
+        }
+        const total = hours * 60 + minutes;
+        return hours <= 48 && minutes <= 59 && total > 0 && total <= 48 * 60 ? total : null;
+      }
+
+      function formatRemainingTimeInput(totalMinutes) {
+        const safe = Math.max(1, Math.ceil(totalMinutes));
+        return safe < 60 ? String(safe) : `${Math.floor(safe / 60)}${String(safe % 60).padStart(2, '0')}`;
+      }
+
+      function validLatLng(lat,lng) { return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180; }
+      function formatMinutes(mins) { return mins >= 60 ? `${Math.floor(mins/60)}時${mins%60 ? `${mins%60}分` : ''}` : `${mins}分`; }
+      function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+    })();
+  </script>
+</body>
+</html>

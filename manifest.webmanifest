@@ -1,0 +1,26 @@
+{
+  "name": "大花截圖記錄",
+  "short_name": "大花記錄",
+  "description": "對照 Pikmin Bloom 截圖，批次更新固定大花的剩餘時間。",
+  "lang": "zh-Hant",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbfaf2",
+  "theme_color": "#2f7d56",
+  "icons": [
+    {
+      "src": "./apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
