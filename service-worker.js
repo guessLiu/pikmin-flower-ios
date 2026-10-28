@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pikmin-flower-ios-v2';
+const CACHE_NAME = 'pikmin-flower-ios-v3';
 const APP_FILES = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const APP_FILES = [
   './app-icon.svg',
   './apple-touch-icon.png',
   './local-map-data.js',
+  './offline-map-manager.js',
   './vendor/leaflet/leaflet.css',
   './vendor/leaflet/leaflet.js'
 ];

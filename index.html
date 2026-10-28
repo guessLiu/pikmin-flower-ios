@@ -79,15 +79,26 @@
     .card h2 { margin: 0 0 4px; font-size: 16px; }
     .hint { margin: 0 0 13px; color: var(--muted); font-size: 12px; line-height: 1.5; }
     .spot-card-head { min-width: 0; }
-    .center-card summary {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      color: var(--ink); font-size: 14px; font-weight: 850; cursor: pointer; list-style: none;
-    }
-    .center-card summary::-webkit-details-marker { display: none; }
-    .center-card summary::after { content: '⌄'; flex: none; color: var(--leaf); font-size: 18px; line-height: 1; transition: transform .2s; }
-    .center-card[open] summary::after { transform: rotate(180deg); }
-    .center-summary { min-width: 0; margin-left: auto; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-    .center-settings-body { padding-top: 8px; }
+    .map-manager-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .map-active-summary { color: var(--muted); font-size: 10px; line-height: 1.4; }
+    .map-manage-toggle { flex: none; padding: 6px 9px; border: 0; border-radius: 9px; color: var(--leaf); background: #edf5f0; font-size: 11px; font-weight: 850; }
+    .map-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 9px; }
+    .map-slot { min-width: 0; padding: 7px 5px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); background: #f8faf8; font-size: 11px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .map-slot.active { border-color: var(--leaf); color: #fff; background: var(--leaf); }
+    .map-slot.empty { border-style: dashed; color: var(--leaf); background: #f4faf6; }
+    .map-manager-panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
+    .map-manager-panel[hidden], .new-map-form[hidden], .replace-map-field[hidden] { display: none; }
+    .map-storage-summary { margin-bottom: 8px; color: var(--muted); font-size: 10px; }
+    .map-manager-list { display: grid; gap: 6px; }
+    .map-manager-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; background: #f4f7f4; }
+    .map-manager-name { font-size: 12px; font-weight: 850; }
+    .map-manager-meta { margin-top: 2px; color: var(--muted); font-size: 9px; line-height: 1.35; }
+    .new-map-form { margin-top: 9px; padding: 10px; border: 1px solid #cfe0d5; border-radius: 12px; background: #f7fbf8; }
+    .new-map-form .field { margin: 8px 0; }
+    .new-map-form-title { font-size: 13px; font-weight: 900; }
+    .form-actions { display: flex; gap: 7px; margin-top: 9px; }
+    .form-actions .btn { flex: 1; }
+    .map-download-status { min-height: 17px; margin-top: 7px; color: var(--muted); font-size: 10px; line-height: 1.45; }
 
     .field { margin: 11px 0; }
     .field label { display: block; margin-bottom: 5px; color: #53675f; font-size: 12px; font-weight: 750; }
@@ -123,6 +134,12 @@
       font-size: 12px; font-weight: 750; pointer-events: none; opacity: 0; transition: .2s;
     }
     .map-tip.show { opacity: 1; }
+    .map-home-button {
+      position: absolute; z-index: 820; right: 10px; bottom: 86px;
+      width: 42px; height: 42px; border: 3px solid #fff; border-radius: 50%;
+      color: #fff; background: #367de0; box-shadow: 0 5px 16px rgba(25,70,130,.34);
+      font-size: 22px; font-weight: 900;
+    }
 
     .flower-list { margin-top: 12px; display: grid; gap: 8px; }
     .flower-item { padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.82); }
@@ -272,7 +289,10 @@
       .spot-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
       .spot-card .hint { margin: 2px 0 0; line-height: 1.35; }
       #addSpot { width: auto; min-width: 132px; }
-      .center-card summary { min-height: 25px; }
+      .map-manager { padding-bottom: 9px; }
+      .map-manager-head h2 { margin-bottom: 1px; }
+      .map-slots { margin-top: 7px; }
+      .map-slot { padding: 6px 4px; }
       .batch-launch { top: max(9px, env(safe-area-inset-top)); left: 9px; min-height: 39px; padding: 7px 11px; }
       .batch-dock { top: max(56px, calc(env(safe-area-inset-top) + 47px)); right: 8px; width: 48vw; padding: 8px; border-radius: 15px; }
       .batch-preview-wrap { height: 31vh; }
@@ -304,17 +324,31 @@
             <button id="addSpot" class="btn secondary wide">＋ 新增開花點</button>
           </div>
 
-          <details class="card center-card">
-            <summary><span>附近地圖中心</span><span id="centerSummary" class="center-summary">25.005022, 121.514369</span></summary>
-            <div class="center-settings-body">
-              <p class="hint">輸入預設點，只載入目前畫面附近的地圖。</p>
-              <div class="grid-2">
-                <div class="field"><label for="centerLat">中心緯度</label><input id="centerLat" type="number" step="any" value="25.005022"></div>
-                <div class="field"><label for="centerLng">中心經度</label><input id="centerLng" type="number" step="any" value="121.514369"></div>
-              </div>
-              <button id="showNearby" class="btn secondary wide">顯示這附近</button>
+          <div class="card map-manager">
+            <div class="map-manager-head">
+              <div><h2>離線地圖</h2><div id="activeMapSummary" class="map-active-summary">正在載入…</div></div>
+              <button id="toggleMapManager" class="map-manage-toggle" type="button">管理</button>
             </div>
-          </details>
+            <div id="mapSlots" class="map-slots" aria-label="離線地圖選擇"></div>
+            <div id="mapManagerPanel" class="map-manager-panel" hidden>
+              <div id="mapStorageSummary" class="map-storage-summary"></div>
+              <div id="mapManagerList" class="map-manager-list"></div>
+              <button id="showNewMapForm" class="btn secondary wide" type="button" style="margin-top:8px">＋ 建立離線地圖</button>
+              <form id="newMapForm" class="new-map-form" hidden>
+                <div class="new-map-form-title">建立並下載離線地圖</div>
+                <div class="field"><label for="newMapName">地圖名稱</label><input id="newMapName" maxlength="20" placeholder="例如：住家、公司"></div>
+                <div class="grid-2">
+                  <div class="field"><label for="centerLat">中心緯度</label><input id="centerLat" type="number" inputmode="decimal" step="any" value="25.005022"></div>
+                  <div class="field"><label for="centerLng">中心經度</label><input id="centerLng" type="number" inputmode="decimal" step="any" value="121.514369"></div>
+                </div>
+                <button id="useCurrentLocation" class="btn ghost wide" type="button">使用手機目前位置</button>
+                <div class="field"><label for="mapRadius">離線範圍</label><select id="mapRadius"><option value="2">中心周圍 2 公里</option><option value="3" selected>中心周圍 3 公里</option><option value="4">中心周圍 4 公里</option></select></div>
+                <div id="replaceMapField" class="field replace-map-field" hidden><label for="replaceMapSelect">三組已滿，下載完成後取代</label><select id="replaceMapSelect"></select></div>
+                <div class="form-actions"><button id="downloadMap" class="btn" type="submit">建立並下載</button><button id="cancelNewMap" class="btn ghost" type="button">取消</button></div>
+                <div id="mapDownloadStatus" class="map-download-status" role="status"></div>
+              </form>
+            </div>
+          </div>
 
           <div class="card" id="timeCard">
             <h2>記錄開花時間</h2>
@@ -347,6 +381,7 @@
     <section class="map-wrap" aria-label="地圖">
       <div id="map"></div>
       <label class="batch-launch" aria-label="選擇 Pikmin 截圖">📷 <span>選截圖</span><input id="screenshotInput" type="file" accept="image/*" multiple></label>
+      <button id="recenterMap" class="map-home-button" type="button" aria-label="回到目前地圖中心">◎</button>
       <aside id="screenshotDock" class="batch-dock" hidden aria-label="截圖對照視窗">
         <div class="batch-head">
           <div id="screenshotName" class="batch-title">Pikmin 截圖</div>
@@ -372,38 +407,45 @@
 
   <script src="./vendor/leaflet/leaflet.js"></script>
   <script src="./local-map-data.js"></script>
+  <script src="./offline-map-manager.js"></script>
   <script>
-    (() => {
-      const SPOTS_KEY = 'pikmin-flower-ios-spots-v1';
-      const OLD_SPOTS_KEY = 'pikmin-flower-spots-v2';
-      const LEGACY_KEY = 'pikmin-flower-route-v1';
-      const CENTER_KEY = 'pikmin-flower-ios-center-v1';
-      const OLD_CENTER_KEY = 'pikmin-flower-center-v1';
+    (async () => {
       const DEFAULT_CENTER = [25.005022, 121.514369];
       const HARVEST_GRACE_MINUTES = 60;
-      let spots = loadSpots();
+      const $ = id => document.getElementById(id);
+      const offlineMaps = new OfflineMapManager({ builtInData: window.LOCAL_MAP_DATA });
+      await offlineMaps.initialize();
+      let activeMapProfile = offlineMaps.activeProfile;
+      let spots = loadSpots(activeMapProfile.id);
       let selectedSpotId = null;
       let pickMode = null;
       let centerMarker = null;
+      let baseMapLayers = null;
+      let switchingMap = false;
       let screenshots = [];
       let screenshotIndex = 0;
       const markerById = new Map();
 
-      const $ = id => document.getElementById(id);
       const map = L.map('map', {
         zoomControl: false,
         preferCanvas: true,
         minZoom: 14,
         maxZoom: 19,
-        maxBounds: [[24.986, 121.491], [25.024, 121.537]],
+        maxBounds: activeMapProfile.bounds,
         maxBoundsViscosity: 0.8
-      }).setView(DEFAULT_CENTER, 16);
+      }).setView(activeMapProfile.viewCenter || activeMapProfile.center, activeMapProfile.zoom || 16);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
-      renderLocalBaseMap();
+      baseMapLayers = L.layerGroup().addTo(map);
+      renderLocalBaseMap(await offlineMaps.getMapData(activeMapProfile.id));
       map.attributionControl.addAttribution('&copy; OpenStreetMap contributors');
 
       $('addSpot').addEventListener('click', startAddingSpot);
-      $('showNearby').addEventListener('click', showNearby);
+      $('toggleMapManager').addEventListener('click', toggleMapManagerPanel);
+      $('showNewMapForm').addEventListener('click', openNewMapForm);
+      $('cancelNewMap').addEventListener('click', closeNewMapForm);
+      $('newMapForm').addEventListener('submit', createOfflineMap);
+      $('useCurrentLocation').addEventListener('click', useCurrentLocation);
+      $('recenterMap').addEventListener('click', recenterActiveMap);
       $('saveBloom').addEventListener('click', saveBloom);
       $('remainTime').addEventListener('keydown', event => {
         if (event.key === 'Enter' && !event.isComposing) {
@@ -428,30 +470,17 @@
       });
       $('closeQuickEntry').addEventListener('click', () => { $('quickEntry').hidden = true; });
       map.on('click', onMapClick);
+      map.on('moveend', saveActiveMapView);
       window.addEventListener('beforeunload', releaseScreenshotUrls);
 
-      const savedCenter = loadCenter();
-      $('centerLat').value = savedCenter[0];
-      $('centerLng').value = savedCenter[1];
-      updateCenterSummary(savedCenter[0], savedCenter[1]);
-      map.setView(savedCenter, 16);
-      setCenterMarker(savedCenter[0], savedCenter[1]);
+      setCenterMarker(activeMapProfile.center[0], activeMapProfile.center[1]);
+      renderMapManager();
       renderAll();
       setInterval(renderAll, 30000);
       registerServiceWorker();
 
-      function loadSpots() {
-        try {
-          const stored = JSON.parse(localStorage.getItem(SPOTS_KEY) || 'null');
-          if (Array.isArray(stored)) return stored.map(normalizeSpot).filter(Boolean);
-          const previous = JSON.parse(localStorage.getItem(OLD_SPOTS_KEY) || 'null');
-          const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY) || '[]');
-          const source = Array.isArray(previous) ? previous : legacy;
-          if (!Array.isArray(source)) return [];
-          const migrated = source.map(normalizeSpot).filter(Boolean);
-          localStorage.setItem(SPOTS_KEY, JSON.stringify(migrated));
-          return migrated;
-        } catch { return []; }
+      function loadSpots(mapId) {
+        return offlineMaps.getSpots(mapId).map(normalizeSpot).filter(Boolean);
       }
 
       function normalizeSpot(value) {
@@ -469,15 +498,16 @@
         };
       }
 
-      function renderLocalBaseMap() {
-        if (!window.LOCAL_MAP_DATA) {
-          $('mapTip').textContent = '找不到本機地圖資料 local-map-data.js';
+      function renderLocalBaseMap(data) {
+        baseMapLayers.clearLayers();
+        if (!data?.features) {
+          $('mapTip').textContent = '找不到這組離線地圖資料';
           $('mapTip').classList.add('show');
           return;
         }
         const renderer = L.canvas({ padding: 0.3 });
-        const areas = window.LOCAL_MAP_DATA.features.filter(f => f.geometry?.type === 'Polygon');
-        const lines = window.LOCAL_MAP_DATA.features.filter(f => f.geometry?.type !== 'Polygon');
+        const areas = data.features.filter(f => f.geometry?.type === 'Polygon');
+        const lines = data.features.filter(f => f.geometry?.type !== 'Polygon');
         const addFeatures = features => L.geoJSON({ type:'FeatureCollection', features }, {
           renderer,
           style: localMapStyle,
@@ -492,7 +522,7 @@
               layer.bindTooltip(escapeHtml(name), { permanent: true, direction: 'center', className: 'map-label', opacity: .82 });
             }
           }
-        }).addTo(map);
+        }).addTo(baseMapLayers);
         addFeatures(areas);
         addFeatures(lines);
       }
@@ -521,26 +551,175 @@
         return { color:'#c1c8c2', weight:1, opacity:.6 };
       }
 
-      function loadCenter() {
+      async function switchOfflineMap(mapId) {
+        if (switchingMap || mapId === activeMapProfile.id) return;
+        switchingMap = true;
+        const previousId = activeMapProfile.id;
         try {
-          const saved = localStorage.getItem(CENTER_KEY);
-          const value = JSON.parse(saved || localStorage.getItem(OLD_CENTER_KEY) || 'null');
-          if (Array.isArray(value) && validLatLng(Number(value[0]), Number(value[1]))) return [Number(value[0]), Number(value[1])];
-        } catch {}
-        return DEFAULT_CENTER;
+          const data = await offlineMaps.getMapData(mapId);
+          activeMapProfile = offlineMaps.setActive(mapId);
+          spots = loadSpots(mapId);
+          clearSpotSelection();
+          map.setMaxBounds(activeMapProfile.bounds);
+          renderLocalBaseMap(data);
+          map.setView(activeMapProfile.viewCenter || activeMapProfile.center, activeMapProfile.zoom || 16, { animate: false });
+          setCenterMarker(activeMapProfile.center[0], activeMapProfile.center[1]);
+          renderMapManager();
+          renderAll();
+          showMapMessage(`已切換到「${activeMapProfile.name}」`);
+        } catch (error) {
+          if (offlineMaps.profiles.some(profile => profile.id === previousId)) offlineMaps.setActive(previousId);
+          alert(error.message || '離線地圖切換失敗。');
+        } finally {
+          switchingMap = false;
+          setTimeout(() => map.invalidateSize(), 50);
+        }
       }
 
-      function showNearby() {
-        const lat = Number($('centerLat').value), lng = Number($('centerLng').value);
-        if (!validLatLng(lat, lng)) return alert('請輸入正確的中心經緯度。');
-        localStorage.setItem(CENTER_KEY, JSON.stringify([lat, lng]));
-        updateCenterSummary(lat, lng);
-        map.setView([lat, lng], 16);
-        setCenterMarker(lat, lng);
+      function recenterActiveMap() {
+        map.setView(activeMapProfile.center, map.getZoom(), { animate: true });
       }
 
-      function updateCenterSummary(lat, lng) {
-        $('centerSummary').textContent = `${Number(lat).toFixed(6)}, ${Number(lng).toFixed(6)}`;
+      function saveActiveMapView() {
+        if (switchingMap || !activeMapProfile) return;
+        const center = map.getCenter();
+        offlineMaps.saveView(activeMapProfile.id, [center.lat, center.lng], map.getZoom());
+      }
+
+      function toggleMapManagerPanel() {
+        const panel = $('mapManagerPanel');
+        panel.hidden = !panel.hidden;
+        $('toggleMapManager').textContent = panel.hidden ? '管理' : '收合';
+        if (!panel.hidden) renderMapManager();
+      }
+
+      function openNewMapForm() {
+        $('mapManagerPanel').hidden = false;
+        $('toggleMapManager').textContent = '收合';
+        $('newMapForm').hidden = false;
+        $('newMapName').value = '';
+        $('centerLat').value = activeMapProfile.center[0];
+        $('centerLng').value = activeMapProfile.center[1];
+        $('mapRadius').value = '3';
+        $('mapDownloadStatus').textContent = '';
+        renderReplacementOptions();
+        setTimeout(() => $('newMapName').focus(), 40);
+      }
+
+      function closeNewMapForm() {
+        $('newMapForm').hidden = true;
+        $('mapDownloadStatus').textContent = '';
+      }
+
+      function renderReplacementOptions() {
+        const replaceField = $('replaceMapField');
+        replaceField.hidden = offlineMaps.canAddMap;
+        const select = $('replaceMapSelect');
+        select.innerHTML = offlineMaps.replaceableProfiles
+          .map(profile => `<option value="${escapeHtml(profile.id)}">取代「${escapeHtml(profile.name)}」及其花點</option>`)
+          .join('');
+      }
+
+      async function createOfflineMap(event) {
+        event.preventDefault();
+        const submit = $('downloadMap');
+        const status = $('mapDownloadStatus');
+        submit.disabled = true;
+        $('cancelNewMap').disabled = true;
+        try {
+          const profile = await offlineMaps.createMap({
+            name: $('newMapName').value,
+            lat: $('centerLat').value,
+            lng: $('centerLng').value,
+            radiusKm: $('mapRadius').value,
+            replaceId: offlineMaps.canAddMap ? null : $('replaceMapSelect').value,
+            onStatus: message => { status.textContent = message; }
+          });
+          activeMapProfile = { ...profile, id: '__loading__' };
+          await switchOfflineMap(profile.id);
+          $('newMapForm').hidden = true;
+          showMapMessage(`「${profile.name}」已下載，可離線使用`);
+        } catch (error) {
+          status.textContent = error.message || '離線地圖建立失敗。';
+        } finally {
+          submit.disabled = false;
+          $('cancelNewMap').disabled = false;
+          renderMapManager();
+        }
+      }
+
+      function useCurrentLocation() {
+        if (!navigator.geolocation) return alert('此瀏覽器不支援目前位置。');
+        const button = $('useCurrentLocation');
+        button.disabled = true;
+        button.textContent = '定位中…';
+        navigator.geolocation.getCurrentPosition(position => {
+          $('centerLat').value = position.coords.latitude.toFixed(6);
+          $('centerLng').value = position.coords.longitude.toFixed(6);
+          button.disabled = false;
+          button.textContent = '使用手機目前位置';
+        }, error => {
+          button.disabled = false;
+          button.textContent = '使用手機目前位置';
+          alert(error.code === 1 ? '請允許位置權限後再試。' : '目前無法取得位置，請直接輸入經緯度。');
+        }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 });
+      }
+
+      async function deleteOfflineMap(mapId) {
+        const profile = offlineMaps.profiles.find(item => item.id === mapId);
+        if (!profile || profile.builtIn) return;
+        if (!confirm(`刪除「${profile.name}」？這會刪除該區離線地圖與所有固定花點。`)) return;
+        const nextProfile = await offlineMaps.deleteMap(mapId);
+        if (activeMapProfile.id === mapId) {
+          activeMapProfile = { ...nextProfile, id: '__loading__' };
+          await switchOfflineMap(nextProfile.id);
+        } else {
+          renderMapManager();
+        }
+      }
+
+      function renderMapManager() {
+        const profiles = offlineMaps.profiles;
+        const active = offlineMaps.activeProfile;
+        $('activeMapSummary').textContent = `${active.name} · ${active.center[0].toFixed(5)}, ${active.center[1].toFixed(5)}`;
+        $('mapSlots').innerHTML = Array.from({ length: OfflineMapManager.MAX_MAPS }, (_, index) => {
+          const profile = profiles[index];
+          if (!profile) return `<button class="map-slot empty" type="button" data-action="new">＋ 地圖 ${index + 1}</button>`;
+          return `<button class="map-slot ${profile.id === active.id ? 'active' : ''}" type="button" data-map-id="${escapeHtml(profile.id)}">${index + 1} ${escapeHtml(profile.name)}</button>`;
+        }).join('');
+        $('mapSlots').querySelectorAll('[data-map-id]').forEach(button => button.addEventListener('click', () => switchOfflineMap(button.dataset.mapId)));
+        $('mapSlots').querySelectorAll('[data-action="new"]').forEach(button => button.addEventListener('click', openNewMapForm));
+
+        $('mapManagerList').innerHTML = profiles.map((profile, index) => `
+          <div class="map-manager-item">
+            <div><div class="map-manager-name">地圖 ${index + 1}・${escapeHtml(profile.name)}${profile.id === active.id ? '（使用中）' : ''}</div>
+            <div class="map-manager-meta">中心 ${profile.center[0].toFixed(5)}, ${profile.center[1].toFixed(5)}・${profile.builtIn ? '內建離線圖' : `${profile.radiusKm} km・${OfflineMapManager.formatBytes(profile.sizeBytes)}`}</div></div>
+            ${profile.builtIn ? '' : `<button class="mini delete" type="button" data-delete-map="${escapeHtml(profile.id)}">刪除</button>`}
+          </div>`).join('');
+        $('mapManagerList').querySelectorAll('[data-delete-map]').forEach(button => button.addEventListener('click', () => deleteOfflineMap(button.dataset.deleteMap)));
+        $('showNewMapForm').textContent = offlineMaps.canAddMap ? '＋ 建立離線地圖' : '＋ 建立並取代自訂地圖';
+        renderReplacementOptions();
+        offlineMaps.storageEstimate().then(estimate => {
+          $('mapStorageSummary').textContent = estimate
+            ? `此 App 已使用約 ${OfflineMapManager.formatBytes(estimate.usage)}；最多保留 3 組地圖。`
+            : '最多保留 3 組離線地圖。';
+        });
+      }
+
+      function clearSpotSelection() {
+        selectedSpotId = null;
+        $('selectedSpot').textContent = '尚未選擇開花點';
+        $('saveBloom').disabled = true;
+        $('flowerType').value = '';
+        $('remainTime').value = '100';
+        $('quickEntry').hidden = true;
+        map.closePopup();
+      }
+
+      function showMapMessage(message) {
+        $('mapTip').textContent = message;
+        $('mapTip').classList.add('show');
+        setTimeout(() => $('mapTip').classList.remove('show'), 2200);
       }
 
       function setCenterMarker(lat, lng) {
@@ -550,7 +729,7 @@
       }
 
       function persist() {
-        localStorage.setItem(SPOTS_KEY, JSON.stringify(spots));
+        offlineMaps.saveSpots(spots, activeMapProfile.id);
       }
 
       function startAddingSpot() {
@@ -559,6 +738,10 @@
         $('mapTip').classList.add('show');
         document.body.style.cursor = 'crosshair';
         $('addSpot').textContent = '請點地圖位置…';
+        if (window.matchMedia('(max-width: 760px)').matches) {
+          document.querySelector('.map-wrap').scrollIntoView({ block: 'start' });
+          setTimeout(() => map.invalidateSize(), 40);
+        }
       }
 
       function onMapClick(e) {
